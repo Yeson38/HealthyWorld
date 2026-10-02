@@ -1,0 +1,1035 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="ghdark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>校园传染病仿真</title>
+
+<link href="https://cdn.jsdelivr.net/npm/daisyui@4.12.14/dist/full.min.css" rel="stylesheet" type="text/css" />
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+tailwind.config = {
+  theme: {
+    extend: {
+      colors: {
+        canvas:  '#0d1117',
+        surface: '#161b22',
+        overlay: '#21262d',
+        line:    '#30363d',
+        fg:      '#c9d1d9',
+        fgHi:    '#f0f6fc',
+        muted:   '#8b949e',
+        subtle:  '#6e7681'
+      },
+      fontFamily: {
+        sans: ['-apple-system','BlinkMacSystemFont','Segoe UI','PingFang SC','Microsoft YaHei','sans-serif'],
+        mono: ['ui-monospace','SFMono-Regular','Menlo','Consolas','monospace']
+      }
+    }
+  }
+}
+</script>
+
+<style>
+[data-theme="ghdark"] {
+  color-scheme: dark;
+  --p:  56% 0.13 150;
+  --pc: 98% 0 0;
+  --s:  42% 0.015 255;
+  --sc: 90% 0.01 255;
+  --a:  66% 0.11 150;
+  --ac: 15% 0.01 150;
+  --n:  27% 0.01 255;
+  --nc: 87% 0.01 255;
+  --b1: 17.6% 0.008 250;
+  --b2: 22%   0.009 255;
+  --b3: 33%   0.010 255;
+  --bc: 85.7% 0.010 240;
+  --rounded-box: 6px;
+  --rounded-btn: 6px;
+  --rounded-badge: 4px;
+  --animation-btn: 0.15s;
+  --animation-input: 0.15s;
+  --btn-focus-scale: 1;
+  --border-btn: 1px;
+}
+
+html { scroll-behavior: smooth; }
+body { background: #0d1117; }
+canvas { display: block; width: 100%; height: auto; }
+input[type="range"] { cursor: pointer; }
+
+/* ---------- 播放器图标按钮 ---------- */
+.icon-btn {
+  display: grid;
+  place-items: center;
+  height: 38px;
+  width: 38px;
+  flex: none;
+  border-radius: 6px;
+  border: 1px solid #30363d;
+  background: #21262d;
+  color: #c9d1d9;
+  transition: background-color .15s ease, border-color .15s ease, color .15s ease, transform .1s ease;
+}
+.icon-btn:hover  { background: #30363d; border-color: #8b949e; color: #f0f6fc; }
+.icon-btn:active { transform: scale(.95); }
+.icon-btn:focus-visible { outline: 2px solid #58a6ff; outline-offset: 1px; }
+
+.icon-btn.primary {
+  background: #238636;
+  border-color: #2ea043;
+  color: #ffffff;
+}
+.icon-btn.primary:hover { background: #2ea043; border-color: #3fb950; }
+
+.icon-btn.ok {
+  color: #3fb950;
+  border-color: #238636;
+}
+
+/* ---------- 板块内的重置按钮 ---------- */
+.panel-reset {
+  display: grid;
+  place-items: center;
+  height: 22px;
+  width: 22px;
+  flex: none;
+  border-radius: 4px;
+  border: none;
+  background: transparent;
+  color: #6e7681;
+  cursor: pointer;
+  transition: background-color .15s ease, color .15s ease;
+}
+.panel-reset:hover  { background: #30363d; color: #f0f6fc; }
+.panel-reset:active { transform: scale(.92); }
+.panel-reset:focus-visible { outline: 2px solid #58a6ff; outline-offset: 1px; }
+
+/* ---------- 方形预设按钮 ---------- */
+.preset-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  height: 82px;
+  border-radius: 6px;
+  border: 1px solid #30363d;
+  background: #21262d;
+  color: #8b949e;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1;
+  cursor: pointer;
+  transition: background-color .15s ease, border-color .15s ease, color .15s ease, transform .1s ease;
+}
+.preset-btn:hover  { background: #30363d; border-color: #8b949e; color: #c9d1d9; }
+.preset-btn:active { transform: scale(.97); }
+.preset-btn:focus-visible { outline: 2px solid #58a6ff; outline-offset: 1px; }
+.preset-btn svg { width: 24px; height: 24px; }
+
+.preset-btn.active {
+  background: rgba(35,134,54,0.14);
+  border-color: #238636;
+  color: #3fb950;
+}
+</style>
+</head>
+
+<body class="min-h-screen bg-canvas font-sans text-fg antialiased">
+
+<header class="sticky top-0 z-30 border-b border-line bg-canvas">
+  <div class="mx-auto flex h-12 max-w-[1400px] items-center px-4 lg:px-6">
+    <h1 class="truncate text-[14px] font-semibold text-fgHi">活力青春，健康护航</h1>
+  </div>
+</header>
+
+<main class="mx-auto grid max-w-[1400px] grid-cols-1 items-start gap-5 px-4 py-5 lg:grid-cols-[minmax(0,1fr)_340px] lg:px-6">
+
+  <!-- ============ 左侧 ============ -->
+  <div class="min-w-0 space-y-5">
+
+    <!-- 仿真 -->
+    <section class="overflow-hidden rounded-md border border-line bg-surface">
+      <div class="flex h-9 items-center justify-between border-b border-line px-3">
+        <span class="text-[12px] font-semibold text-muted">仿真</span>
+        <span class="font-mono text-[12px] text-muted">
+          第 <span id="hud-day" class="text-fgHi">0.0</span> 天
+        </span>
+      </div>
+
+      <div class="bg-canvas">
+        <canvas id="sim"></canvas>
+      </div>
+
+      <div class="border-t border-line bg-line">
+        <div class="grid grid-cols-4 gap-3 px-3 py-3 sm:grid-cols-4">
+          <div class="flex items-center gap-2">
+            <span class="text-[11px] text-subtle">感染</span>
+            <span id="stat-i" class="font-mono text-xl font-semibold" style="color:#f85149">5</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="text-[11px] text-subtle">潜伏</span>
+            <span id="stat-e" class="font-mono text-xl font-semibold" style="color:#d29922">0</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="text-[11px] text-subtle">免疫</span>
+            <span id="stat-r" class="font-mono text-xl font-semibold" style="color:#3fb950">0</span>
+          </div>
+          <div class="flex items-center gap-2 text-fg">
+            <span class="text-[11px] text-subtle">峰值/累计</span>
+            <span id="stat-peak" class="font-mono text-xl font-semibold">5</span>
+            <span class="text-subtle">/</span>
+            <span id="stat-total" class="text-base font-normal text-muted">5</span>
+         </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 曲线 -->
+    <section class="overflow-hidden rounded-md border border-line bg-surface">
+      <div class="flex h-9 flex-wrap items-center justify-between gap-2 border-b border-line px-3">
+        <span class="text-[12px] font-semibold text-muted">曲线</span>
+        <div class="flex items-center gap-3 text-[11px] text-muted">
+          <span class="flex items-center gap-1.5"><span class="h-2 w-2 rounded-sm" style="background:#6e7681"></span>S</span>
+          <span class="flex items-center gap-1.5"><span class="h-2 w-2 rounded-sm" style="background:#d29922"></span>E</span>
+          <span class="flex items-center gap-1.5"><span class="h-2 w-2 rounded-sm" style="background:#f85149"></span>I</span>
+          <span class="flex items-center gap-1.5"><span class="h-2 w-2 rounded-sm" style="background:#3fb950"></span>R</span>
+        </div>
+      </div>
+      <div class="bg-canvas">
+        <canvas id="chart"></canvas>
+      </div>
+    </section>
+
+  </div>
+
+  <!-- ============ 右侧 ============ -->
+  <aside class="space-y-5 lg:sticky lg:top-[60px]">
+
+    <!-- 播放器控制条 -->
+    <div class="flex items-center gap-2 rounded-md border border-line bg-surface p-2">
+
+      <button id="btn-run" class="icon-btn primary" title="开始" aria-label="开始仿真">
+        <svg id="ic-play" width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+          <path d="M7 4.5v15l13-7.5z"/>
+        </svg>
+        <svg id="ic-pause" width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" class="hidden">
+          <path d="M7 4.5h3.6v15H7zM13.4 4.5H17v15h-3.6z"/>
+        </svg>
+      </button>
+
+      <button id="btn-reset" class="icon-btn" title="重置" aria-label="重置仿真">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+             stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <polyline points="1 4 1 10 7 10"/>
+          <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
+        </svg>
+      </button>
+
+      <button id="btn-save" class="icon-btn" title="保存曲线" aria-label="保存曲线用于对比">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+             stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
+        </svg>
+      </button>
+
+      <span id="status-text" class="ml-auto pr-1 text-[12px] text-muted">已暂停</span>
+    </div>
+
+    <!-- 预设 -->
+    <div class="overflow-hidden rounded-md border border-line bg-surface">
+      <div class="flex h-9 items-center border-b border-line bg-overlay/40 px-3">
+        <span class="text-[12px] font-semibold text-muted">预设</span>
+      </div>
+
+      <div class="grid grid-cols-4 gap-2 p-3">
+
+        <button class="preset-btn" data-preset="mask" title="口罩">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+               stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M4.2 9.4c5-2.3 10.6-2.3 15.6 0v5.2c-5 2.3-10.6 2.3-15.6 0z"/>
+            <path d="M4.2 10.2 2.4 8.6"/>
+            <path d="M19.8 10.2 21.6 8.6"/>
+            <path d="M8 11.6h8"/>
+          </svg>
+          <span>口罩</span>
+        </button>
+
+        <button class="preset-btn" data-preset="vax" title="疫苗">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+               stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M17.8 2.6 21.4 6.2"/>
+            <path d="M19.6 4.4 10.2 13.8"/>
+            <path d="M14.8 7.2 17.4 9.8"/>
+            <path d="M10.2 13.8 6.6 17.4l-3-3 3.6-3.6z"/>
+            <path d="M5.4 15.6 2.6 18.4"/>
+          </svg>
+          <span>疫苗</span>
+        </button>
+
+        <button class="preset-btn" data-preset="dist" title="社交距离">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+               stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="5.5" cy="12" r="2.6"/>
+            <circle cx="18.5" cy="12" r="2.6"/>
+            <path d="M9.2 12h5.6"/>
+            <path d="M12.6 10.3 14.3 12l-1.7 1.7"/>
+            <path d="M11.4 10.3 9.7 12l1.7 1.7"/>
+          </svg>
+          <span>距离</span>
+        </button>
+
+        <button class="preset-btn" data-preset="all" title="综合防控">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M12 2.8 19 5.8v6.1c0 4.6-3 7.7-7 9.3-4-1.6-7-4.7-7-9.3V5.8z"></path>
+            <path d="M8.9 12.1 11.2 14.4 15.4 10.2"></path>
+           </svg>
+          <span>综合防控</span>
+        </button>
+
+      </div>
+    </div>
+
+    <!-- 疾病参数 -->
+    <div class="overflow-hidden rounded-md border border-line bg-surface">
+
+      <div class="flex h-9 items-center justify-between border-b border-line bg-overlay/40 pl-3 pr-1.5">
+        <span class="text-[12px] font-semibold text-muted">疾病参数</span>
+        <button class="panel-reset" data-panel="disease" title="重置疾病参数" aria-label="重置疾病参数">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <polyline points="1 4 1 10 7 10"/>
+            <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
+          </svg>
+        </button>
+      </div>
+
+      <div class="space-y-4 p-3">
+
+        <div>
+          <div class="mb-1.5 flex items-baseline justify-between">
+            <label for="beta" class="text-[12px] text-muted">传播概率</label>
+            <span id="beta-out" class="font-mono text-[12px] text-fg">0.012</span>
+          </div>
+          <input id="beta" type="range" min="0.002" max="0.030" step="0.001" value="0.012"
+                 class="range range-xs range-primary w-full">
+        </div>
+
+        <div>
+          <div class="mb-1.5 flex items-baseline justify-between">
+            <label for="contactR" class="text-[12px] text-muted">接触半径</label>
+            <span id="contactR-out" class="font-mono text-[12px] text-fg">15 px</span>
+          </div>
+          <input id="contactR" type="range" min="6" max="26" step="1" value="15"
+                 class="range range-xs range-primary w-full">
+        </div>
+
+        <div>
+          <div class="mb-1.5 flex items-baseline justify-between">
+            <label for="incub" class="text-[12px] text-muted">潜伏期</label>
+            <span id="incub-out" class="font-mono text-[12px] text-fg">3 天</span>
+          </div>
+          <input id="incub" type="range" min="1" max="8" step="0.5" value="3"
+                 class="range range-xs range-primary w-full">
+        </div>
+
+        <div>
+          <div class="mb-1.5 flex items-baseline justify-between">
+            <label for="infect" class="text-[12px] text-muted">感染期</label>
+            <span id="infect-out" class="font-mono text-[12px] text-fg">7 天</span>
+          </div>
+          <input id="infect" type="range" min="3" max="14" step="0.5" value="7"
+                 class="range range-xs range-primary w-full">
+        </div>
+
+      </div>
+
+      <div class="flex h-9 items-center justify-between border-y border-line bg-overlay/40 pl-3 pr-1.5">
+        <span class="text-[12px] font-semibold text-muted">干预</span>
+        <button class="panel-reset" data-panel="intervention" title="重置干预参数" aria-label="重置干预参数">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <polyline points="1 4 1 10 7 10"/>
+            <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
+          </svg>
+        </button>
+      </div>
+
+      <div class="space-y-4 p-3">
+
+        <div>
+          <div class="mb-1.5 flex items-baseline justify-between">
+            <label for="mask" class="text-[12px] text-muted">口罩佩戴率</label>
+            <span id="mask-out" class="font-mono text-[12px] text-fg">0%</span>
+          </div>
+          <input id="mask" type="range" min="0" max="1" step="0.05" value="0"
+                 class="range range-xs range-primary w-full">
+        </div>
+
+        <div>
+          <div class="mb-1.5 flex items-baseline justify-between">
+            <label for="vax" class="text-[12px] text-muted">疫苗覆盖率</label>
+            <span id="vax-out" class="font-mono text-[12px] text-fg">0%</span>
+          </div>
+          <input id="vax" type="range" min="0" max="1" step="0.05" value="0"
+                 class="range range-xs range-primary w-full">
+        </div>
+
+        <div>
+          <div class="mb-1.5 flex items-baseline justify-between">
+            <label for="dist" class="text-[12px] text-muted">社交距离依从率</label>
+            <span id="dist-out" class="font-mono text-[12px] text-fg">0%</span>
+          </div>
+          <input id="dist" type="range" min="0" max="1" step="0.05" value="0"
+                 class="range range-xs range-primary w-full">
+        </div>
+
+      </div>
+
+      <div class="flex h-9 items-center justify-between border-y border-line bg-overlay/40 pl-3 pr-1.5">
+        <span class="text-[12px] font-semibold text-muted">人群</span>
+        <button class="panel-reset" data-panel="population" title="重置人群参数" aria-label="重置人群参数">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <polyline points="1 4 1 10 7 10"/>
+            <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
+          </svg>
+        </button>
+      </div>
+
+      <div class="space-y-4 p-3">
+
+        <div>
+          <div class="mb-1.5 flex items-baseline justify-between">
+            <label for="pop" class="text-[12px] text-muted">人数</label>
+            <span id="pop-out" class="font-mono text-[12px] text-fg">400 人</span>
+          </div>
+          <input id="pop" type="range" min="100" max="600" step="20" value="400"
+                 class="range range-xs range-primary w-full">
+        </div>
+
+        <div>
+          <div class="mb-1.5 flex items-baseline justify-between">
+            <label for="initI" class="text-[12px] text-muted">初始感染者</label>
+            <span id="initI-out" class="font-mono text-[12px] text-fg">5 人</span>
+          </div>
+          <input id="initI" type="range" min="1" max="30" step="1" value="5"
+                 class="range range-xs range-primary w-full">
+        </div>
+
+        <div>
+          <div class="mb-1.5 flex items-baseline justify-between">
+            <label for="speed" class="text-[12px] text-muted">速度</label>
+            <span id="speed-out" class="font-mono text-[12px] text-fg">2×</span>
+          </div>
+          <input id="speed" type="range" min="1" max="6" step="1" value="2"
+                 class="range range-xs range-primary w-full">
+        </div>
+
+      </div>
+    </div>
+
+  </aside>
+</main>
+
+<script>
+/* ============================================================
+   常量
+   ============================================================ */
+const SIM_W = 760, SIM_H = 500;
+const CHART_W = 1080, CHART_H = 240;
+const TICKS_PER_DAY = 50;
+const HIST_STEP     = 5;
+const MASK_EFF      = 0.60;
+const AGENT_R       = 3.2;
+const TAU           = Math.PI * 2;
+const SEED          = 20240501;
+const CHART_STEP    = 50;      // 横轴按 50 天的倍数自适应
+const VAX_TICK_RATE = 0.005;   // 每 tick 最多接种总人口的 0.5%（≈2.8 天达到 70% 覆盖率）
+
+const COL = {
+  canvas: '#0d1117',
+  grid:   'rgba(240,246,252,0.045)',
+  grid2:  'rgba(240,246,252,0.06)',
+  axis:   'rgba(240,246,252,0.12)',
+  text:   '#6e7681',
+  S: '#6e7681',
+  E: '#d29922',
+  I: '#f85149',
+  R: '#3fb950',
+  saved: '#8b949e'
+};
+
+const UI = {
+  beta:         0.012,
+  contactR:     15,
+  incubDays:    3,
+  infectDays:   7,
+  maskRate:     0,
+  vaxCoverage:  0,
+  distRate:     0,
+  N:            400,
+  initInfected: 5,
+  speed:        2
+};
+
+/* 各板块默认值（供板块内重置按钮使用） */
+const PANEL_DEFAULTS = {
+  beta:         0.012,
+  contactR:     15,
+  incubDays:    3,
+  infectDays:   7,
+  maskRate:     0,
+  vaxCoverage:  0,
+  distRate:     0,
+  N:            400,
+  initInfected: 5,
+  speed:        2
+};
+
+/* 各板块包含的参数键 */
+const PANEL_KEYS = {
+  disease:      ['beta', 'contactR', 'incubDays', 'infectDays'],
+  intervention: ['maskRate', 'vaxCoverage', 'distRate'],
+  population:   ['N', 'initInfected', 'speed']
+};
+
+/* ============================================================
+   工具
+   ============================================================ */
+function mulberry32(a) {
+  return function () {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function fitCanvas(canvas, w, h) {
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  canvas.width  = Math.round(w * dpr);
+  canvas.height = Math.round(h * dpr);
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return ctx;
+}
+
+const simCtx   = fitCanvas(document.getElementById('sim'),   SIM_W,   SIM_H);
+const chartCtx = fitCanvas(document.getElementById('chart'), CHART_W, CHART_H);
+
+/* ============================================================
+   世界
+   ============================================================ */
+function createWorld(seed) {
+  const rng = mulberry32(seed);
+  const N = UI.N;
+  const agents = new Array(N);
+
+  for (let i = 0; i < N; i++) {
+    agents[i] = {
+      x: 10 + rng() * (SIM_W - 20),
+      y: 10 + rng() * (SIM_H - 20),
+      dir: rng() * TAU,
+      state: 0,
+      timer: 0,
+      maskTrait: rng(),
+      vaxTrait:  rng()
+    };
+  }
+
+  /* 初始疫苗屏障：世界创建时一次性完成（这是"疫情爆发前已接种好的人群"） */
+  if (UI.vaxCoverage > 0) {
+    for (const a of agents) if (a.vaxTrait < UI.vaxCoverage) a.state = 3;
+  }
+
+  let placed = 0, guard = 0;
+  while (placed < UI.initInfected && guard++ < 200000) {
+    const a = agents[(rng() * N) | 0];
+    if (a.state !== 0) continue;
+    a.state = 2;
+    a.timer = Math.max(1, Math.round(UI.infectDays * TICKS_PER_DAY * 0.8));
+    placed++;
+  }
+
+  const w = {
+    agents, rng,
+    tick: 0,
+    peakI: 0,
+    totalInfected: placed,
+    hist: { t: [], S: [], E: [], I: [], R: [] },
+    cur: { S: 0, E: 0, I: 0, R: 0 }
+  };
+  tally(w);
+  pushHistory(w);
+  return w;
+}
+
+function tally(w) {
+  let S = 0, E = 0, I = 0, R = 0;
+  const ag = w.agents;
+  for (let i = 0; i < ag.length; i++) {
+    const s = ag[i].state;
+    if (s === 0) S++; else if (s === 1) E++; else if (s === 2) I++; else R++;
+  }
+  w.cur.S = S; w.cur.E = E; w.cur.I = I; w.cur.R = R;
+  if (I > w.peakI) w.peakI = I;
+}
+
+function pushHistory(w) {
+  w.hist.t.push(w.tick);
+  w.hist.S.push(w.cur.S);
+  w.hist.E.push(w.cur.E);
+  w.hist.I.push(w.cur.I);
+  w.hist.R.push(w.cur.R);
+}
+
+/* ============================================================
+   推进
+   ============================================================ */
+function stepWorld(w) {
+  const agents = w.agents, rng = w.rng, n = agents.length;
+
+  /* 3.1 随机游走 */
+  const spd = 1.5 * (1 - 0.45 * UI.distRate);
+  for (let i = 0; i < n; i++) {
+    const a = agents[i];
+    a.dir += (rng() - 0.5) * 0.55;
+    a.x += Math.cos(a.dir) * spd;
+    a.y += Math.sin(a.dir) * spd;
+    if (a.x < 4)              { a.x = 4;           a.dir = Math.PI - a.dir; }
+    else if (a.x > SIM_W - 4) { a.x = SIM_W - 4;   a.dir = Math.PI - a.dir; }
+    if (a.y < 4)              { a.y = 4;           a.dir = -a.dir; }
+    else if (a.y > SIM_H - 4) { a.y = SIM_H - 4;   a.dir = -a.dir; }
+  }
+
+  /* ----------------------------------------------------------
+     3.2 疫苗逐步生效（关键修改）
+     之前是遍历所有人一次全转 R，导致点"综合防控"瞬间全体免疫。
+     现在每个 tick 只接种总人口的 ~0.5%，70% 覆盖率需要 ~2.8 天。
+     ---------------------------------------------------------- */
+  if (UI.vaxCoverage > 0) {
+    const maxPerTick = Math.max(1, Math.ceil(n * VAX_TICK_RATE));
+    let vaxedThisTick = 0;
+
+    /* 从随机位置开始遍历，避免总是优先接种同一批个体 */
+    const startIdx = (rng() * n) | 0;
+    for (let k = 0; k < n && vaxedThisTick < maxPerTick; k++) {
+      const i = (startIdx + k) % n;
+      const a = agents[i];
+      if (a.state === 0 && a.vaxTrait < UI.vaxCoverage) {
+        a.state = 3;
+        vaxedThisTick++;
+      }
+    }
+  }
+
+  /* 3.3 空间网格加速的接触传播 */
+  const r    = Math.max(4, UI.contactR * (1 - 0.6 * UI.distRate));
+  const r2   = r * r;
+  const cell = Math.max(r, 6);
+  const cols = Math.ceil(SIM_W / cell) + 1;
+  const rows = Math.ceil(SIM_H / cell) + 1;
+  const buckets = new Array(cols * rows);
+
+  for (let i = 0; i < n; i++) {
+    const a = agents[i];
+    const k = ((a.y / cell) | 0) * cols + ((a.x / cell) | 0);
+    (buckets[k] || (buckets[k] = [])).push(i);
+  }
+
+  const beta = UI.beta;
+  for (let i = 0; i < n; i++) {
+    const a = agents[i];
+    if (a.state !== 2) continue;
+    const aMasked = a.maskTrait < UI.maskRate;
+    const cx = (a.x / cell) | 0, cy = (a.y / cell) | 0;
+
+    for (let oy = -1; oy <= 1; oy++) {
+      const yy = cy + oy; if (yy < 0 || yy >= rows) continue;
+      for (let ox = -1; ox <= 1; ox++) {
+        const xx = cx + ox; if (xx < 0 || xx >= cols) continue;
+        const bkt = buckets[yy * cols + xx]; if (!bkt) continue;
+
+        for (let bi = 0; bi < bkt.length; bi++) {
+          const j = bkt[bi]; if (j === i) continue;
+          const b = agents[j];
+          if (b.state !== 0) continue;
+
+          const dx = a.x - b.x, dy = a.y - b.y;
+          if (dx * dx + dy * dy > r2) continue;
+
+          let p = beta;
+          if (aMasked)                   p *= (1 - MASK_EFF);
+          if (b.maskTrait < UI.maskRate) p *= (1 - MASK_EFF);
+
+          if (rng() < p) {
+            b.state = 1;
+            b.timer = Math.max(1, Math.round(
+              UI.incubDays * TICKS_PER_DAY * (0.7 + 0.6 * rng())
+            ));
+            w.totalInfected++;
+          }
+        }
+      }
+    }
+  }
+
+  /* 3.4 状态机 */
+  for (let i = 0; i < n; i++) {
+    const a = agents[i];
+    if (a.state === 1) {
+      if (--a.timer <= 0) {
+        a.state = 2;
+        a.timer = Math.max(1, Math.round(
+          UI.infectDays * TICKS_PER_DAY * (0.7 + 0.6 * rng())
+        ));
+      }
+    } else if (a.state === 2) {
+      if (--a.timer <= 0) a.state = 3;
+    }
+  }
+
+  w.tick++;
+  tally(w);
+  if (w.tick % HIST_STEP === 0) pushHistory(w);
+}
+
+/* ============================================================
+   渲染：仿真
+   ============================================================ */
+let world = null;
+let savedCurve = null;
+
+function renderSim() {
+  const c = simCtx;
+  c.clearRect(0, 0, SIM_W, SIM_H);
+  c.fillStyle = COL.canvas;
+  c.fillRect(0, 0, SIM_W, SIM_H);
+
+  c.strokeStyle = COL.grid;
+  c.lineWidth = 1;
+  c.beginPath();
+  for (let x = 0; x <= SIM_W; x += 38) { c.moveTo(x + 0.5, 0); c.lineTo(x + 0.5, SIM_H); }
+  for (let y = 0; y <= SIM_H; y += 38) { c.moveTo(0, y + 0.5); c.lineTo(SIM_W, y + 0.5); }
+  c.stroke();
+
+  if (!world) return;
+  const ag = world.agents, n = ag.length;
+
+  c.beginPath();
+  for (let i = 0; i < n; i++) {
+    const a = ag[i];
+    if (a.state !== 2) continue;
+    c.moveTo(a.x + AGENT_R * 2.6, a.y);
+    c.arc(a.x, a.y, AGENT_R * 2.6, 0, TAU);
+  }
+  c.fillStyle = 'rgba(248,81,73,0.12)';
+  c.fill();
+
+  const order = [3, 0, 1, 2];
+  const cols4 = [COL.R, COL.S, COL.E, COL.I];
+  for (let k = 0; k < 4; k++) {
+    const st = order[k];
+    c.beginPath();
+    for (let i = 0; i < n; i++) {
+      const a = ag[i];
+      if (a.state !== st) continue;
+      c.moveTo(a.x + AGENT_R, a.y);
+      c.arc(a.x, a.y, AGENT_R, 0, TAU);
+    }
+    c.fillStyle = cols4[k];
+    c.fill();
+  }
+}
+
+/* ============================================================
+   渲染：曲线
+   ============================================================ */
+function renderChart() {
+  const c = chartCtx;
+  const W = CHART_W, H = CHART_H;
+  c.clearRect(0, 0, W, H);
+  c.fillStyle = COL.canvas;
+  c.fillRect(0, 0, W, H);
+  if (!world) return;
+
+  const padL = 58, padR = 22, padT = 22, padB = 28;
+  const pw = W - padL - padR;
+  const ph = H - padT - padB;
+
+  const N = Math.max(1, UI.N);
+
+  /* 动态横轴：保存曲线与当前曲线最大天数之上 50 的倍数 */
+  const currentDay = world.tick / TICKS_PER_DAY;
+  let savedDay = 0;
+  if (savedCurve && savedCurve.t.length > 0) {
+    savedDay = savedCurve.t[savedCurve.t.length - 1] / TICKS_PER_DAY;
+  }
+  const rawMax = Math.max(currentDay, savedDay);
+  const maxDay = Math.max(CHART_STEP, Math.ceil(rawMax / CHART_STEP) * CHART_STEP);
+  const maxTick = maxDay * TICKS_PER_DAY;
+
+  /* 纵轴网格 */
+  c.font = '500 11px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
+  c.textAlign = 'right';
+  c.textBaseline = 'middle';
+  const ySteps = 4;
+  for (let i = 0; i <= ySteps; i++) {
+    const y = padT + ph - (ph * i) / ySteps;
+    c.strokeStyle = COL.grid2;
+    c.lineWidth = 1;
+    c.beginPath(); c.moveTo(padL, y + 0.5); c.lineTo(W - padR, y + 0.5); c.stroke();
+    c.fillStyle = COL.text;
+    c.fillText(String(Math.round((N * i) / ySteps)), padL - 10, y);
+  }
+
+  /* 横轴刻度 */
+  c.textAlign = 'center';
+  c.textBaseline = 'top';
+  for (let i = 0; i <= 5; i++) {
+    const x = padL + (pw * i) / 5;
+    c.fillStyle = COL.text;
+    c.fillText(String(Math.round((maxDay * i) / 5)), x, padT + ph + 8);
+  }
+
+  /* 坐标轴 */
+  c.strokeStyle = COL.axis;
+  c.lineWidth = 1;
+  c.beginPath();
+  c.moveTo(padL + 0.5, padT);
+  c.lineTo(padL + 0.5, padT + ph);
+  c.lineTo(W - padR, padT + ph);
+  c.stroke();
+
+  /* 曲线绘制器 */
+  const plot = (tArr, arr, color, width, dash) => {
+    const nn = arr.length;
+    if (nn < 2) return;
+    c.save();
+    c.beginPath();
+    c.rect(padL, padT, pw, ph);
+    c.clip();
+
+    const skip = Math.max(1, Math.floor(nn / 900));
+    c.beginPath();
+    c.setLineDash(dash || []);
+    let started = false;
+    for (let i = 0; i < nn; i += skip) {
+      const x = padL + (tArr[i] / maxTick) * pw;
+      const y = padT + ph - (arr[i] / N) * ph;
+      if (!started) { c.moveTo(x, y); started = true; } else { c.lineTo(x, y); }
+    }
+    const li = nn - 1;
+    c.lineTo(padL + (tArr[li] / maxTick) * pw, padT + ph - (arr[li] / N) * ph);
+    c.strokeStyle = color;
+    c.lineWidth = width;
+    c.lineJoin = 'round';
+    c.lineCap = 'round';
+    c.stroke();
+    c.setLineDash([]);
+    c.restore();
+  };
+
+  if (savedCurve && savedCurve.I.length > 1) {
+    plot(savedCurve.t, savedCurve.I, COL.saved, 1.6, [6, 5]);
+  }
+
+  plot(world.hist.t, world.hist.S, COL.S, 2.0);
+  plot(world.hist.t, world.hist.E, COL.E, 2.0);
+  plot(world.hist.t, world.hist.I, COL.I, 2.8);
+  plot(world.hist.t, world.hist.R, COL.R, 2.0);
+}
+
+/* ============================================================
+   HUD
+   ============================================================ */
+const elDay    = document.getElementById('hud-day');
+const elI      = document.getElementById('stat-i');
+const elE      = document.getElementById('stat-e');
+const elR      = document.getElementById('stat-r');
+const elTotal  = document.getElementById('stat-total');
+const elPeak   = document.getElementById('stat-peak');
+const elStatus = document.getElementById('status-text');
+const btnRun   = document.getElementById('btn-run');
+const icPlay   = document.getElementById('ic-play');
+const icPause  = document.getElementById('ic-pause');
+
+function updateHud() {
+  if (!world) return;
+  elDay.textContent   = (world.tick / TICKS_PER_DAY).toFixed(1);
+  elI.textContent     = world.cur.I;
+  elE.textContent     = world.cur.E;
+  elR.textContent     = world.cur.R;
+  elPeak.textContent  = world.peakI;
+  elTotal.textContent = world.totalInfected;
+}
+
+/* ============================================================
+   主循环
+   ============================================================ */
+let running = false;
+
+function setRunning(v) {
+  running = v;
+  icPlay.classList.toggle('hidden', v);
+  icPause.classList.toggle('hidden', !v);
+  btnRun.title = v ? '暂停' : '开始';
+  btnRun.setAttribute('aria-label', v ? '暂停仿真' : '开始仿真');
+  elStatus.textContent = v ? '运行中' : '已暂停';
+  elStatus.style.color = v ? '#3fb950' : '#8b949e';
+}
+
+function loop() {
+  requestAnimationFrame(loop);
+  if (running && world) {
+    for (let i = 0; i < UI.speed; i++) stepWorld(world);
+    if (world.cur.E === 0 && world.cur.I === 0 && world.tick > TICKS_PER_DAY) {
+      setRunning(false);
+    }
+  }
+  renderSim();
+  renderChart();
+  updateHud();
+}
+
+function resetSim() {
+  setRunning(false);
+  world = createWorld(SEED);
+  renderSim();
+  renderChart();
+  updateHud();
+}
+
+/* ============================================================
+   滑块
+   ============================================================ */
+const SLIDERS = [
+  { id: 'beta',     key: 'beta',         fmt: v => v.toFixed(3) },
+  { id: 'contactR', key: 'contactR',     fmt: v => v + ' px' },
+  { id: 'incub',    key: 'incubDays',    fmt: v => v + ' 天' },
+  { id: 'infect',   key: 'infectDays',   fmt: v => v + ' 天' },
+  { id: 'mask',     key: 'maskRate',     fmt: v => Math.round(v * 100) + '%' },
+  { id: 'vax',      key: 'vaxCoverage',  fmt: v => Math.round(v * 100) + '%' },
+  { id: 'dist',     key: 'distRate',     fmt: v => Math.round(v * 100) + '%' },
+  { id: 'pop',      key: 'N',            fmt: v => v + ' 人', rebuild: true },
+  { id: 'initI',    key: 'initInfected', fmt: v => v + ' 人', rebuild: true },
+  { id: 'speed',    key: 'speed',        fmt: v => v + '×' }
+];
+
+function syncSlider(s) {
+  const el  = document.getElementById(s.id);
+  const out = document.getElementById(s.id + '-out');
+  UI[s.key] = parseFloat(el.value);
+  out.textContent = s.fmt ? s.fmt(UI[s.key]) : UI[s.key];
+}
+
+SLIDERS.forEach(s => {
+  const el = document.getElementById(s.id);
+  el.addEventListener('input', () => {
+    syncSlider(s);
+    clearPresetActive();
+    if (s.rebuild) resetSim();
+  });
+  syncSlider(s);
+});
+
+/* ============================================================
+   播放器按钮
+   ============================================================ */
+btnRun.addEventListener('click', () => setRunning(!running));
+document.getElementById('btn-reset').addEventListener('click', resetSim);
+
+const btnSave = document.getElementById('btn-save');
+btnSave.addEventListener('click', () => {
+  if (!world) return;
+  savedCurve = { t: world.hist.t.slice(), I: world.hist.I.slice() };
+  btnSave.classList.add('ok');
+  setTimeout(() => btnSave.classList.remove('ok'), 1200);
+});
+
+/* ============================================================
+   板块内重置
+   ============================================================ */
+function resetPanel(panelName) {
+  const keys = PANEL_KEYS[panelName];
+  if (!keys) return;
+
+  let needRebuild = false;
+
+  SLIDERS.forEach(s => {
+    if (!keys.includes(s.key)) return;
+    const el  = document.getElementById(s.id);
+    const def = PANEL_DEFAULTS[s.key];
+
+    if (s.rebuild && UI[s.key] !== def) needRebuild = true;
+
+    el.value = def;
+    syncSlider(s);
+  });
+
+  if (panelName === 'intervention') clearPresetActive();
+  if (needRebuild) resetSim();
+}
+
+document.querySelectorAll('[data-panel]').forEach(btn => {
+  btn.addEventListener('click', () => resetPanel(btn.dataset.panel));
+});
+
+/* ============================================================
+   预设
+   ============================================================ */
+const PRESETS = {
+  none: { maskRate: 0,   vaxCoverage: 0,   distRate: 0   },
+  mask: { maskRate: 0.8, vaxCoverage: 0,   distRate: 0   },
+  vax:  { maskRate: 0,   vaxCoverage: 0.7, distRate: 0   },
+  dist: { maskRate: 0,   vaxCoverage: 0,   distRate: 0.6 },
+  all:  { maskRate: 0.8, vaxCoverage: 0.7, distRate: 0.6 }
+};
+
+const presetBtns = Array.from(document.querySelectorAll('[data-preset]'));
+
+function clearPresetActive() {
+  presetBtns.forEach(b => b.classList.remove('active'));
+}
+
+function applyPreset(name) {
+  const p = PRESETS[name];
+  if (!p) return;
+
+  Object.assign(UI, p);
+  document.getElementById('mask').value = p.maskRate;
+  document.getElementById('vax').value  = p.vaxCoverage;
+  document.getElementById('dist').value = p.distRate;
+  SLIDERS.forEach(syncSlider);
+
+  clearPresetActive();
+  const btn = presetBtns.find(b => b.dataset.preset === name);
+  if (btn) btn.classList.add('active');
+}
+
+presetBtns.forEach(btn => {
+  btn.addEventListener('click', () => applyPreset(btn.dataset.preset));
+});
+
+/* ============================================================
+   快捷键
+   ============================================================ */
+document.addEventListener('keydown', e => {
+  const tag = (e.target.tagName || '').toLowerCase();
+  if (tag === 'input' || tag === 'textarea') return;
+  if (e.code === 'Space') { e.preventDefault(); setRunning(!running); }
+  if (e.code === 'KeyR')  { resetSim(); }
+});
+
+/* ============================================================
+   启动
+   ============================================================ */
+resetSim();
+applyPreset('none');
+loop();
+</script>
+</body>
+</html>
